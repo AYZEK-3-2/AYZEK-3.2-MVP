@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb~
+
+# Üretilen / ara çıktılar (runtime'da oluşur, repoya girmez)
+data/processed/
+output/
+
+# Ham veri — büyük xlsx dosyaları git'te tutulmaz
+data/raw/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
