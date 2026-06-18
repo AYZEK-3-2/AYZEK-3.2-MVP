@@ -11,7 +11,6 @@ Feature grupları:
 """
 import pandas as pd
 import numpy as np
-from src.config import EGITIM_BITIS
 
 
 # Türkiye resmi tatil ve dini bayram günleri (2026, ±1 gün tampon dahil değil)
@@ -81,3 +80,74 @@ FEATURE_COLS = [
     "tatil",
 ]
 TARGET_COL = "desi"
+
+
+# ===========================================================================
+# Direct multi-step feature seti (birincil yöntem)
+# ===========================================================================
+# Recursive yöntem 7 günü zincirleme üretir (her gün bir önceki tahmine dayanır)
+# → hata birikir. Direct yöntemde her hedef gün, SABİT bir origin'den (= ilk
+# tahmin gününden bir önceki gün) ufuk h kadar ileriye DOĞRUDAN tahmin edilir;
+# tahmin geri beslenmez. Tüm lag/rolling origin'e sabitlenir, sadece hedef günün
+# takvimi ileri bakar. CV'de recursive %24.1 → direct %21.1 (her fold'da daha iyi).
+
+DIRECT_HORIZONS = range(1, 8)   # 1..7 günlük ufuklar (11–17 Mayıs)
+
+
+def build_direct_features(df: pd.DataFrame, horizons=DIRECT_HORIZONS) -> pd.DataFrame:
+    """
+    Her (hat, hedef gün, ufuk h) satırı için origin = hedef − h gününe sabitlenmiş
+    lag/rolling özellikleri + hedef günün takvim/tatil özelliklerini üretir.
+
+    Parametre
+    ---------
+    df       : load_desi_talep() çıktısı (cikis_tm, varis_tm, tarih, desi)
+    horizons : tahmin ufukları (varsayılan 1..7)
+
+    Döndürür
+    --------
+    Genişletilmiş DataFrame. Eğitimde dropna(["v0","vo7"]) uygulanmalı; tahminde
+    origin'e göre filtrelenir (bkz. direct_predict).
+    """
+    df = df.copy().sort_values(["cikis_tm", "varis_tm", "tarih"]).reset_index(drop=True)
+    tatiller = pd.to_datetime(TATIL_GUNLERI)
+
+    frames = []
+    for h in horizons:
+        d = df.copy()
+        d["h"] = h
+        g = d.groupby(["cikis_tm", "varis_tm"], sort=False)["desi"]
+        # Origin-sabitli lag'ler (origin = hedef − h): shift(h) origin'e iner
+        d["v0"]   = g.shift(h)         # origin günündeki değer (son bilinen)
+        d["vo1"]  = g.shift(h + 1)
+        d["vo6"]  = g.shift(h + 6)
+        d["vo7"]  = g.shift(h + 7)     # origin'den bir hafta önce
+        d["vo13"] = g.shift(h + 13)
+        d["rom7"]  = g.transform(lambda x: x.shift(h).rolling(7,  min_periods=4).mean())
+        d["ros7"]  = g.transform(lambda x: x.shift(h).rolling(7,  min_periods=4).std())
+        d["rom14"] = g.transform(lambda x: x.shift(h).rolling(14, min_periods=7).mean())
+        d["ros14"] = g.transform(lambda x: x.shift(h).rolling(14, min_periods=7).std())
+        frames.append(d)
+
+    out = pd.concat(frames, ignore_index=True)
+
+    # Hedef günün takvimi (ileri bakar — hedef tarih bilinir, sızıntı değil)
+    out["gun_haftada"] = out["tarih"].dt.dayofweek
+    out["ay"]          = out["tarih"].dt.month
+    out["ay_gunu"]     = out["tarih"].dt.day
+    out["ay_basi"]     = (out["tarih"].dt.day <= 3).astype(int)
+    out["ay_sonu"]     = (out["tarih"].dt.day >= 28).astype(int)
+    out["tatil"]       = out["tarih"].isin(tatiller).astype(int)
+
+    out["cikis_tm"]    = out["cikis_tm"].astype("category")
+    out["varis_tm"]    = out["varis_tm"].astype("category")
+    return out
+
+
+DIRECT_FEATURE_COLS = [
+    "cikis_tm", "varis_tm", "h",
+    "v0", "vo1", "vo6", "vo7", "vo13",
+    "rom7", "ros7", "rom14", "ros14",
+    "gun_haftada", "ay", "ay_gunu", "ay_basi", "ay_sonu",
+    "tatil",
+]

@@ -21,9 +21,8 @@ from pathlib import Path
 
 from src.config import DATA_PROC, OUTPUT_FILES, DECIMAL_PLACES
 from src.data_loader import load_all
-from src.layer1_prediction.feature_engineering import build_features
-from src.layer1_prediction.model import train, cross_validate
-from src.layer1_prediction.predict import recursive_predict
+from src.layer1_prediction.model import train_direct, cross_validate
+from src.layer1_prediction.predict import direct_predict
 from src.layer2_assignment.distance import build_distance_matrix, save_distance_matrix, load_distance_matrix
 from src.layer2_assignment.rental_placer import place_rental_vehicles
 from src.layer2_assignment.waypoint import find_waypoint_candidates
@@ -60,26 +59,23 @@ def run_pipeline(run_cv: bool = False, run_ilp: bool = False):
     print(f"  Matris boyutu: {dist_df.shape}")
 
     # ------------------------------------------------------------------
-    # 3. Feature mühendisliği + model eğitimi
+    # 3. Model eğitimi (direct multi-step seed ensemble)
     # ------------------------------------------------------------------
-    print("[3/9] Feature mühendisliği...")
-    df_feat = build_features(df_talep)
-    print(f"  Feature boyutu: {df_feat.shape}")
-
     if run_cv:
         print("  Cross-validation çalışıyor (bu birkaç dakika sürebilir)...")
-        cv_sonuc = cross_validate(df_feat)
-        print(f"  CV MAE: {cv_sonuc['mae']:.1f} | MAPE: {cv_sonuc['mape']:.3f}")
+        cv_sonuc = cross_validate(df_talep)
+        print(f"  CV MAE: {cv_sonuc['mae']:.1f} | WAPE: {cv_sonuc['wape']:.3f}"
+              f" (%{100*cv_sonuc['wape']:.1f}) | MAPE(ref): {cv_sonuc['mape']:.2f}")
 
-    print("[3/9] Model eğitiliyor...")
-    model = train(df_feat)
+    print("[3/9] Model eğitiliyor (direct multi-step, 5-seed ensemble)...")
+    model = train_direct(df_talep)
     print("  Model eğitimi tamamlandı.")
 
     # ------------------------------------------------------------------
-    # 4. Recursive tahmin
+    # 4. Direct tahmin
     # ------------------------------------------------------------------
-    print("[4/9] 7 günlük tahmin üretiliyor (recursive)...")
-    df_tahmin = recursive_predict(model=model, df_history=df_talep)
+    print("[4/9] 7 günlük tahmin üretiliyor (direct)...")
+    df_tahmin = direct_predict(model=model, df_history=df_talep)
     print(f"  Tahmin satırları: {len(df_tahmin)}")
 
     # ------------------------------------------------------------------
