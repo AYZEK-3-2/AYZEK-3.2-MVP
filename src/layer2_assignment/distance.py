@@ -34,8 +34,8 @@ def build_distance_matrix(df_koordinat: pd.DataFrame) -> pd.DataFrame:
     n   = len(tms)
     mat = np.zeros((n, n))
 
-    for i, row_i in df_koordinat.iterrows():
-        for j, row_j in df_koordinat.iterrows():
+    for i, (_, row_i) in enumerate(df_koordinat.iterrows()):
+        for j, (_, row_j) in enumerate(df_koordinat.iterrows()):
             mat[i, j] = haversine_km(
                 row_i["enlem"], row_i["boylam"],
                 row_j["enlem"], row_j["boylam"],

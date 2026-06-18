@@ -107,3 +107,11 @@ OUTPUT_FILES = {
 
 # Ondalık basamak — kanonik yuvarlama
 DECIMAL_PLACES = 2
+
+# ---------------------------------------------------------------------------
+# Sanity-check sabitleri
+# ---------------------------------------------------------------------------
+BEKLENEN_N_HAT      = 89
+BEKLENEN_N_GUN      = 130
+BEKLENEN_N_TM       = 18
+BEKLENEN_N_SATIRLAR = 10_770

@@ -23,12 +23,13 @@ from src.config import DATA_PROC, OUTPUT_FILES, DECIMAL_PLACES
 from src.data_loader import load_all, sanity_check
 from src.layer1_prediction.model import train_direct, cross_validate
 from src.layer1_prediction.predict import direct_predict
-from src.layer2_assignment.distance import build_distance_matrix, save_distance_matrix, load_distance_matrix
+from src.layer2_assignment.distance import build_distance_matrix, save_distance_matrix, load_distance_matrix, validate_distance_matrix
 from src.layer2_assignment.rental_placer import place_rental_vehicles
 from src.layer2_assignment.waypoint import find_waypoint_candidates
 from src.layer2_assignment.spot_assigner import assign_spot
 from src.layer3_validation.ilp_validator import validate_day
-from src.layer3_validation.invariant import check_invariant
+from src.layer3_validation.invariant import check_invariant, validate_unfulfilled_schema
+from src.layer3_validation.quality_gate import run_quality_gate
 
 
 def run_pipeline(run_cv: bool = False, run_ilp: bool = False):
@@ -59,6 +60,7 @@ def run_pipeline(run_cv: bool = False, run_ilp: bool = False):
         dist_df = build_distance_matrix(df_koord)
         save_distance_matrix(dist_df)
     print(f"  Matris boyutu: {dist_df.shape}")
+    validate_distance_matrix(dist_df)
 
     # ------------------------------------------------------------------
     # 3. Model eğitimi (direct multi-step seed ensemble)
@@ -141,6 +143,8 @@ def run_pipeline(run_cv: bool = False, run_ilp: bool = False):
     spot_plan, unfulfilled = assign_spot(kalan_df, dist_df)
     print(f"  Spot plan satırları: {len(spot_plan)}")
     print(f"  Karşılanamayan artık yük satırları: {len(unfulfilled)}")
+    if not unfulfilled.empty:
+        validate_unfulfilled_schema(unfulfilled)
 
     # ------------------------------------------------------------------
     # 8. İnvariant kontrolü
@@ -170,6 +174,12 @@ def run_pipeline(run_cv: bool = False, run_ilp: bool = False):
     print(f"\n  Toplam operasyonel maliyet: {toplam_maliyet:,.0f} TL")
     print(f"  Tahmin dosyası    : {OUTPUT_FILES['tahmin']}")
     print(f"  Araç plan dosyası : {OUTPUT_FILES['plan']}")
+
+    # ------------------------------------------------------------------
+    # Kalite kapısı — teslim öncesi çapraz kontrol
+    # ------------------------------------------------------------------
+    print("\n[Kalite Kapısı] Süleyman + Hacer çıktıları kontrol ediliyor...")
+    run_quality_gate(df_tahmin_out, tam_plan, unfulfilled)
 
     # ------------------------------------------------------------------
     # 10. ILP doğrulama (opsiyonel)
