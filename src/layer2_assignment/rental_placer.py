@@ -50,9 +50,11 @@ def place_rental_vehicles(
             tip    = k_row["arac_tipi"]
             kapasite = VEHICLE_TYPES[tip]["kapasite"]
 
-            talep_hat  = talep_map.get((cikis, varis), 0.0)
-            toplam_kap = kapasite * n_arac
-            atanan     = min(talep_hat, toplam_kap)   # gerçek yük
+            # kalan_map kullan — aynı hat için birden fazla kiralık satır varsa
+            # önceki atamanın düşüldüğü güncel kalanı görmek gerekir.
+            mevcut_kalan = kalan_map.get((cikis, varis), 0.0)
+            toplam_kap   = kapasite * n_arac
+            atanan       = min(mevcut_kalan, toplam_kap)   # gerçek yük
 
             mesafe = dist_df.loc[cikis, varis] if cikis != varis else 0.0
             maliyet_birim = vehicle_cost(tip, mesafe, kiralik=True, n_arac=1)
@@ -70,7 +72,7 @@ def place_rental_vehicles(
                 })
 
             # Kalan yükü güncelle
-            kalan_map[(cikis, varis)] = max(0.0, talep_hat - atanan)
+            kalan_map[(cikis, varis)] = max(0.0, mevcut_kalan - atanan)
 
         # Kalan yük tablosu
         for (cikis, varis), kalan in kalan_map.items():

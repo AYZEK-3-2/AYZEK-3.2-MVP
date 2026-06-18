@@ -30,20 +30,6 @@ def _min_vehicle_for_load(peak_load: float) -> str | None:
     return None  # hiçbir araç yetmez
 
 
-def _leg_loads(loads_per_stop: dict, stops: list[str]) -> list[float]:
-    """
-    Çok-duraklı rotada her bacaktaki anlık (dinamik) yükü hesaplar.
-    loads_per_stop = {tm: (yuklenecek, inecek)} sözlüğü.
-    """
-    current = 0.0
-    leg_loads = []
-    for i in range(len(stops) - 1):
-        origin = stops[i]
-        yuklenecek, inecek = loads_per_stop.get(origin, (0.0, 0.0))
-        current += yuklenecek - inecek
-        leg_loads.append(current)
-    return leg_loads
-
 
 def find_waypoint_candidates(
     kalan_df: pd.DataFrame,
@@ -77,6 +63,11 @@ def find_waypoint_candidates(
             ]:
                 # Senaryo: araç O→ara_durak→D gider; ara_durak = origin2
                 # Koşul: origin2, O ve D arasında coğrafi olarak yol üstünde
+                # Hat2'nin varışı rota varışıyla örtüşmeli; aksi halde kargo
+                # yanlış noktaya teslim edilir.
+                if dest2 != dest:
+                    continue
+
                 ara = origin2
                 if ara == origin or ara == dest:
                     continue
