@@ -5,7 +5,7 @@ Tüm downstream modüller bu modülden veri alır.
 """
 import pandas as pd
 from pathlib import Path
-from src.config import RAW_FILES, DECIMAL_PLACES
+from src.config import RAW_FILES, DECIMAL_PLACES, BEKLENEN_N_HAT, BEKLENEN_N_GUN, BEKLENEN_N_TM, BEKLENEN_N_SATIRLAR
 
 
 def load_desi_talep() -> pd.DataFrame:
@@ -83,23 +83,22 @@ def sanity_check(data: dict) -> None:
 
     hatalar = []
 
-    if n_hat != 89:
-        hatalar.append(f"Hat sayısı beklenen 89, bulunan {n_hat}")
+    if n_hat != BEKLENEN_N_HAT:
+        hatalar.append(f"Hat sayısı beklenen {BEKLENEN_N_HAT}, bulunan {n_hat}")
 
-    if gunler != 130:
-        hatalar.append(f"Gün sayısı beklenen 130, bulunan {gunler}")
+    if gunler != BEKLENEN_N_GUN:
+        hatalar.append(f"Gün sayısı beklenen {BEKLENEN_N_GUN}, bulunan {gunler}")
 
-    if n_tm != 18:
-        hatalar.append(f"TM sayısı beklenen 18, bulunan {n_tm}")
+    if n_tm != BEKLENEN_N_TM:
+        hatalar.append(f"TM sayısı beklenen {BEKLENEN_N_TM}, bulunan {n_tm}")
 
     neg = (df["desi"] < 0).sum()
     if neg > 0:
         hatalar.append(f"Negatif desi değeri var: {neg} satır")
 
-    BEKLENEN_SATIRLAR = 10_770
-    if n_satirlar != BEKLENEN_SATIRLAR:
+    if n_satirlar != BEKLENEN_N_SATIRLAR:
         hatalar.append(
-            f"Toplam satır beklenen {BEKLENEN_SATIRLAR}, bulunan {n_satirlar}"
+            f"Toplam satır beklenen {BEKLENEN_N_SATIRLAR}, bulunan {n_satirlar}"
         )
 
     if hatalar:

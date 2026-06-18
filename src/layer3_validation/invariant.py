@@ -7,6 +7,43 @@ Eşitlik bozulursa ValueError fırlatır — pipeline teslim öncesi durur.
 """
 import pandas as pd
 
+# Adım 17: Karşılanamayanlar tablosunun zorunlu kolon yapısı.
+# Bu sözlük pipeline genelinde tek kaynak; hem Hacer'in üretimi hem
+# Emrullah'ın doğrulaması aynı şemayı kullanır.
+UNFULFILLED_SCHEMA = {
+    "Tarih":               "datetime64[ns]",
+    "Çıkış TM":            "object",
+    "Varış TM":            "object",
+    "Karşılanamayan Desi": "float64",
+    "Sebep":               "object",
+}
+
+
+def validate_unfulfilled_schema(unfulfilled: pd.DataFrame) -> None:
+    """
+    Karşılanamayan tablo yapısını doğrular.
+    Eksik kolon veya dtype uyumsuzluğu varsa ValueError fırlatır.
+    """
+    eksik = [k for k in UNFULFILLED_SCHEMA if k not in unfulfilled.columns]
+    if eksik:
+        raise ValueError(
+            f"Karşılanamayan tablosunda eksik kolonlar: {eksik}\n"
+            f"Beklenen: {list(UNFULFILLED_SCHEMA.keys())}"
+        )
+
+    tip_hatalar = []
+    for kolon, beklenen in UNFULFILLED_SCHEMA.items():
+        gercek = unfulfilled[kolon].dtype
+        if beklenen == "datetime64[ns]" and not pd.api.types.is_datetime64_any_dtype(unfulfilled[kolon]):
+            tip_hatalar.append(f"  • {kolon}: beklenen datetime, bulunan {gercek}")
+        elif beklenen == "float64" and not pd.api.types.is_numeric_dtype(unfulfilled[kolon]):
+            tip_hatalar.append(f"  • {kolon}: beklenen float64, bulunan {gercek}")
+
+    if tip_hatalar:
+        raise ValueError("Karşılanamayan tablosunda tip uyumsuzluğu:\n" + "\n".join(tip_hatalar))
+
+    print(f"[validate_unfulfilled_schema] OK — {len(unfulfilled)} satır, şema ve tipler doğru")
+
 
 def check_invariant(
     df_tahmin: pd.DataFrame,
@@ -26,13 +63,16 @@ def check_invariant(
     ----
     ValueError — ihlal varsa ilk 5 satırı göstererek fırlatır.
     """
-    atanan = (
-        tam_plan.groupby(["Tarih", "Çıkış TM", "Varış TM"])["Atanan Desi"]
-        .sum()
-        .reset_index()
-        .rename(columns={"Tarih": "tarih", "Çıkış TM": "cikis_tm",
-                         "Varış TM": "varis_tm", "Atanan Desi": "atanan"})
-    )
+    if not tam_plan.empty and "Tarih" in tam_plan.columns:
+        atanan = (
+            tam_plan.groupby(["Tarih", "Çıkış TM", "Varış TM"])["Atanan Desi"]
+            .sum()
+            .reset_index()
+            .rename(columns={"Tarih": "tarih", "Çıkış TM": "cikis_tm",
+                             "Varış TM": "varis_tm", "Atanan Desi": "atanan"})
+        )
+    else:
+        atanan = pd.DataFrame(columns=["tarih", "cikis_tm", "varis_tm", "atanan"])
 
     if not unfulfilled.empty:
         unful = (
