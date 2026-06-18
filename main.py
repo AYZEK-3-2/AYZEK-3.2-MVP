@@ -28,6 +28,7 @@ from src.layer2_assignment.rental_placer import place_rental_vehicles
 from src.layer2_assignment.waypoint import find_waypoint_candidates
 from src.layer2_assignment.spot_assigner import assign_spot
 from src.layer3_validation.ilp_validator import validate_day
+from src.layer3_validation.invariant import check_invariant
 
 
 def run_pipeline(run_cv: bool = False, run_ilp: bool = False):
@@ -146,34 +147,7 @@ def run_pipeline(run_cv: bool = False, run_ilp: bool = False):
     # ------------------------------------------------------------------
     print("[8/9] İnvariant kontrolü...")
     tam_plan = pd.concat([kiralik_plan, ugrama_plan, spot_plan], ignore_index=True)
-
-    atanan_toplam = (
-        tam_plan.groupby(["Tarih", "Çıkış TM", "Varış TM"])["Atanan Desi"].sum()
-        .reset_index()
-        .rename(columns={"Çıkış TM": "cikis_tm", "Varış TM": "varis_tm", "Tarih": "tarih", "Atanan Desi": "atanan"})
-    )
-
-    if not unfulfilled.empty:
-        unful_grp = (
-            unfulfilled.groupby(["Tarih", "Çıkış TM", "Varış TM"])["Karşılanamayan Desi"].sum()
-            .reset_index()
-            .rename(columns={"Çıkış TM": "cikis_tm", "Varış TM": "varis_tm", "Tarih": "tarih", "Karşılanamayan Desi": "karsılanamayan"})
-        )
-    else:
-        unful_grp = pd.DataFrame(columns=["tarih", "cikis_tm", "varis_tm", "karsılanamayan"])
-
-    check = df_tahmin.merge(atanan_toplam, on=["tarih", "cikis_tm", "varis_tm"], how="left")
-    check = check.merge(unful_grp, on=["tarih", "cikis_tm", "varis_tm"], how="left")
-    check["atanan"]       = check["atanan"].fillna(0)
-    check["karsılanamayan"] = check["karsılanamayan"].fillna(0)
-    check["delta"] = (check["tahmin"] - check["atanan"] - check["karsılanamayan"]).abs()
-
-    violations = check[check["delta"] > 0.1]
-    if violations.empty:
-        print("  İnvariant: OK — atanan + karşılanamayan = tahmin")
-    else:
-        print(f"  UYARI: {len(violations)} hat-günde invariant ihlali! İlk 5:")
-        print(violations[["tarih", "cikis_tm", "varis_tm", "tahmin", "atanan", "karsılanamayan", "delta"]].head())
+    check_invariant(df_tahmin, tam_plan, unfulfilled)
 
     # ------------------------------------------------------------------
     # 9. Çıktı üretimi
