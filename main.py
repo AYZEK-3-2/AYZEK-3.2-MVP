@@ -20,7 +20,7 @@ import numpy as np
 from pathlib import Path
 
 from src.config import DATA_PROC, OUTPUT_FILES, DECIMAL_PLACES
-from src.data_loader import load_all
+from src.data_loader import load_all, sanity_check
 from src.layer1_prediction.model import train_direct, cross_validate
 from src.layer1_prediction.predict import direct_predict
 from src.layer2_assignment.distance import build_distance_matrix, save_distance_matrix, load_distance_matrix
@@ -43,6 +43,7 @@ def run_pipeline(run_cv: bool = False, run_ilp: bool = False):
     df_maliyet = data["arac_maliyet"]
     df_kiralik = data["kiralik_araclar"]
     print(f"  Desi talep: {df_talep.shape}, Koordinatlar: {df_koord.shape}")
+    sanity_check(data)
 
     # ------------------------------------------------------------------
     # 2. Mesafe matrisi
