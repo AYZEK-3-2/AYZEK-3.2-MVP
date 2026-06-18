@@ -20,8 +20,8 @@ OUTPUT_DIR   = PROJECT_ROOT / "output"
 RAW_FILES = {
     "desi_talep":    DATA_RAW / "Desi_talep.xlsx",
     "koordinatlar":  DATA_RAW / "Koordinatlar_v2.xlsx",
-    "arac_maliyet":  DATA_RAW / "Araç_Kapasite_Maliyet.xlsx",
-    "kiralik_arac":  DATA_RAW / "Kiralık_Araçlar.xlsx",
+    "arac_maliyet":  DATA_RAW / "Arac_Kapasite_Maliyet.xlsx",
+    "kiralik_arac":  DATA_RAW / "Kiralik_Araclar.xlsx",
 }
 
 # ---------------------------------------------------------------------------
