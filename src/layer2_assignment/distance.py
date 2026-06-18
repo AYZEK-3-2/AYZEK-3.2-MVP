@@ -56,6 +56,38 @@ def load_distance_matrix() -> pd.DataFrame:
     return pd.read_csv(path, index_col=0, encoding="utf-8-sig")
 
 
+def validate_distance_matrix(dist_df: pd.DataFrame) -> None:
+    """
+    Üretilen mesafe matrisinin beklenen yapıya uyduğunu doğrular.
+    Herhangi bir ihlalde ValueError fırlatır.
+
+    Kontroller:
+      - Boyut 18×18
+      - Köşegen (aynı TM→TM) sıfır
+      - Simetrik (A→B == B→A)
+      - Tüm değerler ≥ 0
+    """
+    hatalar = []
+
+    if dist_df.shape != (18, 18):
+        hatalar.append(f"Boyut beklenen (18,18), bulunan {dist_df.shape}")
+
+    diagonal = np.diag(dist_df.values)
+    if not np.allclose(diagonal, 0):
+        hatalar.append("Köşegen sıfır değil — aynı TM'ye mesafe 0 olmalı")
+
+    if not np.allclose(dist_df.values, dist_df.values.T, atol=1e-6):
+        hatalar.append("Matris simetrik değil — A→B mesafesi B→A'dan farklı")
+
+    if (dist_df.values < 0).any():
+        hatalar.append("Negatif mesafe değeri var")
+
+    if hatalar:
+        raise ValueError("Mesafe matrisi doğrulama başarısız:\n" + "\n".join(f"  • {h}" for h in hatalar))
+
+    print(f"[validate_distance_matrix] OK — {dist_df.shape[0]}×{dist_df.shape[1]} | simetrik | köşegen=0 | tüm değerler ≥ 0")
+
+
 def route_distance(dist_df: pd.DataFrame, stops: list[str]) -> float:
     """
     Çok-duraklı rotanın kümülatif Haversine mesafesini döndürür.
