@@ -30,6 +30,7 @@ for _akis in (sys.stdout, sys.stderr):
 
 from src.config import DATA_PROC, OUTPUT_FILES, DECIMAL_PLACES
 from src.data_loader import load_all, sanity_check
+from src.output_writer import write_all
 from src.layer1_prediction.model import train_direct, cross_validate
 from src.layer1_prediction.predict import direct_predict
 from src.layer2_assignment.distance import build_distance_matrix, save_distance_matrix, load_distance_matrix, validate_distance_matrix
@@ -106,41 +107,66 @@ def run_pipeline(run_cv: bool = False, run_ilp: bool = False):
     wp_candidates = find_waypoint_candidates(kalan_df, dist_df, all_tms)
     print(f"  Uğrama adayı sayısı: {len(wp_candidates)}")
 
-    # Seçilen uğramalı rotalar için kalan_df'i güncelle ve plan satırı üret
+    # Seçilen uğramalı rotalar için kalan_df'i güncelle ve plan satırı üret.
+    # Her hat (tarih, cikis, varis) yalnızca BİR ugrama adayında kullanılabilir;
+    # en yüksek tasarruflu aday önce geldiği için greedy seçim optimale yakındır.
     ugrama_plan_rows = []
-    ugrama_kullanilanlar = set()   # (tarih, hat1, hat2) — çifte atamayı önler
+    ugrama_hats = set()   # (tarih, cikis, varis) — bu hat zaten ugrama'da kullanıldı
 
     for cand in wp_candidates:
         gun  = cand["tarih"]
         hat1 = cand["hat1"]
         hat2 = cand["hat2"]
-        key  = (gun, hat1, hat2)
-        if key in ugrama_kullanilanlar:
+
+        key1 = (gun, hat1[0], hat1[1])
+        key2 = (gun, hat2[0], hat2[1])
+
+        # Her iki hat da daha önce kullanılmamış olmalı
+        if key1 in ugrama_hats or key2 in ugrama_hats:
             continue
 
-        # kalan_df'de hat1 ve hat2 yüklerini düş
-        def reduce_kalan(cikis, varis, azalt):
-            mask = (
-                (kalan_df["tarih"] == gun) &
-                (kalan_df["cikis_tm"] == cikis) &
-                (kalan_df["varis_tm"] == varis)
-            )
-            kalan_df.loc[mask, "kalan"] = (kalan_df.loc[mask, "kalan"] - azalt).clip(lower=0)
+        # kalan_df'den güncel yükleri al (önceki adaylar düşmüş olabilir)
+        mask1 = ((kalan_df["tarih"] == gun) &
+                 (kalan_df["cikis_tm"] == hat1[0]) &
+                 (kalan_df["varis_tm"] == hat1[1]))
+        mask2 = ((kalan_df["tarih"] == gun) &
+                 (kalan_df["cikis_tm"] == hat2[0]) &
+                 (kalan_df["varis_tm"] == hat2[1]))
 
-        reduce_kalan(hat1[0], hat1[1], cand["load1"])
-        reduce_kalan(hat2[0], hat2[1], cand["load2"])
+        actual1 = float(kalan_df.loc[mask1, "kalan"].iloc[0]) if mask1.any() else 0.0
+        actual2 = float(kalan_df.loc[mask2, "kalan"].iloc[0]) if mask2.any() else 0.0
+
+        if actual1 <= 0 or actual2 <= 0:
+            continue
+
+        # kalan_df'yi güncelle
+        kalan_df.loc[mask1, "kalan"] = (kalan_df.loc[mask1, "kalan"] - actual1).clip(lower=0)
+        kalan_df.loc[mask2, "kalan"] = (kalan_df.loc[mask2, "kalan"] - actual2).clip(lower=0)
 
         guzergah = "→".join(cand["stops"])
+        # Her hat ayrı satıra yazılır — invariant her O→D çiftini ayrı kontrol eder.
+        # Maliyet yalnızca hat1 satırında; toplam maliyet değişmez.
         ugrama_plan_rows.append({
             "Tarih":       gun,
             "Araç Tipi":   f"Spot {cand['tip']} (Uğramalı)",
-            "Çıkış TM":    cand["stops"][0],
-            "Varış TM":    cand["stops"][-1],
+            "Çıkış TM":    hat1[0],
+            "Varış TM":    hat1[1],
             "Güzergah":    guzergah,
-            "Atanan Desi": round(cand["toplam_desi"], 2),
+            "Atanan Desi": round(actual1, 2),
             "Maliyet":     cand["maliyet"],
         })
-        ugrama_kullanilanlar.add(key)
+        ugrama_plan_rows.append({
+            "Tarih":       gun,
+            "Araç Tipi":   f"Spot {cand['tip']} (Uğramalı)",
+            "Çıkış TM":    hat2[0],
+            "Varış TM":    hat2[1],
+            "Güzergah":    guzergah,
+            "Atanan Desi": round(actual2, 2),
+            "Maliyet":     0.0,
+        })
+
+        ugrama_hats.add(key1)
+        ugrama_hats.add(key2)
 
     ugrama_plan = pd.DataFrame(ugrama_plan_rows)
     print(f"  Seçilen uğramalı rota: {len(ugrama_plan)}")
@@ -166,23 +192,11 @@ def run_pipeline(run_cv: bool = False, run_ilp: bool = False):
     # 9. Çıktı üretimi
     # ------------------------------------------------------------------
     print("[9/9] Çıktı dosyaları yazılıyor...")
-    OUTPUT_FILES["tahmin"].parent.mkdir(parents=True, exist_ok=True)
-
     df_tahmin_out = df_tahmin.rename(columns={
         "tarih": "Tarih", "cikis_tm": "Çıkış TM",
         "varis_tm": "Varış TM", "tahmin": "Tahmin Edilen Desi"
     })
-    df_tahmin_out.to_excel(OUTPUT_FILES["tahmin"], index=False)
-
-    tam_plan.to_excel(OUTPUT_FILES["plan"], index=False)
-
-    if not unfulfilled.empty:
-        unfulfilled.to_excel(OUTPUT_FILES["karsılanamaz"], index=False)
-
-    toplam_maliyet = tam_plan["Maliyet"].sum()
-    print(f"\n  Toplam operasyonel maliyet: {toplam_maliyet:,.0f} TL")
-    print(f"  Tahmin dosyası    : {OUTPUT_FILES['tahmin']}")
-    print(f"  Araç plan dosyası : {OUTPUT_FILES['plan']}")
+    toplam_maliyet = write_all(df_tahmin_out, tam_plan, unfulfilled, OUTPUT_FILES)
 
     # ------------------------------------------------------------------
     # Kalite kapısı — teslim öncesi çapraz kontrol

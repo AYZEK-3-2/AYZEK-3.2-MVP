@@ -60,11 +60,12 @@ AYZEK-3.2-PROJECT/
 ├── src/
 │   ├── config.py                     # Tüm sabitler, dosya yolları, araç parametreleri
 │   ├── data_loader.py                # Ham veri okuma ve standartlaştırma
+│   ├── output_writer.py              # xlsx üreticisi — format, stil, toplam maliyet satırı
 │   │
 │   ├── layer1_prediction/
 │   │   ├── feature_engineering.py   # Lag, rolling ortalama, takvim, tatil özellikleri
 │   │   ├── model.py                  # LightGBM eğitimi + walk-forward CV
-│   │   └── predict.py                # Recursive multi-step tahmin
+│   │   └── predict.py                # Direct multi-step tahmin (5-seed ensemble)
 │   │
 │   ├── layer2_assignment/
 │   │   ├── distance.py               # Haversine matrisi + kümülatif rota mesafesi
@@ -73,7 +74,9 @@ AYZEK-3.2-PROJECT/
 │   │   └── spot_assigner.py          # Greedy+ spot atama + artık yük yönetimi
 │   │
 │   └── layer3_validation/
-│       └── ilp_validator.py          # Rota-tabanlı ILP doğrulama valfi (PuLP)
+│       ├── ilp_validator.py          # Rota-tabanlı ILP doğrulama valfi (PuLP)
+│       ├── invariant.py              # atanan + karşılanamayan = tahmin kontrolü
+│       └── quality_gate.py           # Teslim öncesi çapraz format doğrulama
 │
 ├── output/                           # Teslim dosyaları (pipeline sonrası oluşur)
 ├── notebooks/                        # EDA ve deney notebook'ları
