@@ -17,11 +17,34 @@ OUTPUT_DIR   = PROJECT_ROOT / "output"
 # ---------------------------------------------------------------------------
 # Ham veri dosyaları
 # ---------------------------------------------------------------------------
+# Ham veri dosyaları repoya ASCII isimle dahil edilir (tek kaynak). _resolve_raw,
+# birinde hâlâ Türkçe isimli (Araç_…) kopya kalırsa diye güvenlik ağı: isim
+# büyük/küçük ve Türkçe/ASCII farkına toleranslı çözer.
+def _ascii_fold(s: str) -> str:
+    s = s.lower()
+    for a, b in (("ç", "c"), ("ı", "i"), ("ş", "s"), ("ğ", "g"),
+                 ("ü", "u"), ("ö", "o"), ("i̇", "i"), ("İ", "i")):
+        s = s.replace(a, b)
+    return s
+
+
+def _resolve_raw(ideal_name: str) -> Path:
+    exact = DATA_RAW / ideal_name
+    if exact.exists():
+        return exact
+    hedef = _ascii_fold(ideal_name)
+    if DATA_RAW.exists():
+        for p in DATA_RAW.glob("*.xlsx"):
+            if _ascii_fold(p.name) == hedef:
+                return p
+    return exact   # bulunamazsa ideal yolu döndür (hata mesajı anlamlı kalsın)
+
+
 RAW_FILES = {
-    "desi_talep":    DATA_RAW / "Desi_talep.xlsx",
-    "koordinatlar":  DATA_RAW / "Koordinatlar_v2.xlsx",
-    "arac_maliyet":  DATA_RAW / "Arac_Kapasite_Maliyet.xlsx",
-    "kiralik_arac":  DATA_RAW / "Kiralik_Araclar.xlsx",
+    "desi_talep":    _resolve_raw("Desi_talep.xlsx"),
+    "koordinatlar":  _resolve_raw("Koordinatlar_v2.xlsx"),
+    "arac_maliyet":  _resolve_raw("Arac_Kapasite_Maliyet.xlsx"),
+    "kiralik_arac":  _resolve_raw("Kiralik_Araclar.xlsx"),
 }
 
 # ---------------------------------------------------------------------------
