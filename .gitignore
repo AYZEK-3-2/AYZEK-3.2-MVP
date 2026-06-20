@@ -14,8 +14,9 @@ venv/
 data/processed/
 output/
 
-# Ham veri — büyük xlsx dosyaları git'te tutulmaz
-data/raw/
+# Ham veri (data/raw) repoya DAHİL EDİLİR: küçük (~350 KB), private repo,
+# jüri klonlayıp `python main.py` ile doğrudan çalıştırabilsin. ASCII isimler
+# kullanılır (Türkçe karakter OS/encoding sorunlarını önlemek için).
 
 # IDE
 .vscode/

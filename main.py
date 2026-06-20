@@ -15,9 +15,18 @@ Adımlar (MVP Mimarisi §4.1):
   9. Çıktı üretimi (xlsx)
  10. ILP doğrulama (opsiyonel, örnek gün)
 """
+import sys
 import pandas as pd
 import numpy as np
 from pathlib import Path
+
+# Windows konsolu (cp1254) '≥ → ≠ • ⚠' gibi karakterlerde çöker; stdout'u UTF-8'e
+# sabitle ki tüm modüllerin print'leri her makinede sorunsuz çalışsın.
+for _akis in (sys.stdout, sys.stderr):
+    try:
+        _akis.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
 
 from src.config import DATA_PROC, OUTPUT_FILES, DECIMAL_PLACES
 from src.data_loader import load_all, sanity_check
