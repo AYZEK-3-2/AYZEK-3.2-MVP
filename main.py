@@ -30,6 +30,7 @@ for _akis in (sys.stdout, sys.stderr):
 
 from src.config import DATA_PROC, OUTPUT_FILES, DECIMAL_PLACES
 from src.data_loader import load_all, sanity_check
+from src.output_writer import write_all
 from src.layer1_prediction.model import train_direct, cross_validate
 from src.layer1_prediction.predict import direct_predict
 from src.layer2_assignment.distance import build_distance_matrix, save_distance_matrix, load_distance_matrix, validate_distance_matrix
@@ -166,23 +167,11 @@ def run_pipeline(run_cv: bool = False, run_ilp: bool = False):
     # 9. Çıktı üretimi
     # ------------------------------------------------------------------
     print("[9/9] Çıktı dosyaları yazılıyor...")
-    OUTPUT_FILES["tahmin"].parent.mkdir(parents=True, exist_ok=True)
-
     df_tahmin_out = df_tahmin.rename(columns={
         "tarih": "Tarih", "cikis_tm": "Çıkış TM",
         "varis_tm": "Varış TM", "tahmin": "Tahmin Edilen Desi"
     })
-    df_tahmin_out.to_excel(OUTPUT_FILES["tahmin"], index=False)
-
-    tam_plan.to_excel(OUTPUT_FILES["plan"], index=False)
-
-    if not unfulfilled.empty:
-        unfulfilled.to_excel(OUTPUT_FILES["karsılanamaz"], index=False)
-
-    toplam_maliyet = tam_plan["Maliyet"].sum()
-    print(f"\n  Toplam operasyonel maliyet: {toplam_maliyet:,.0f} TL")
-    print(f"  Tahmin dosyası    : {OUTPUT_FILES['tahmin']}")
-    print(f"  Araç plan dosyası : {OUTPUT_FILES['plan']}")
+    toplam_maliyet = write_all(df_tahmin_out, tam_plan, unfulfilled, OUTPUT_FILES)
 
     # ------------------------------------------------------------------
     # Kalite kapısı — teslim öncesi çapraz kontrol
