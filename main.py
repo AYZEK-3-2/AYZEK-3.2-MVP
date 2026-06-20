@@ -107,41 +107,66 @@ def run_pipeline(run_cv: bool = False, run_ilp: bool = False):
     wp_candidates = find_waypoint_candidates(kalan_df, dist_df, all_tms)
     print(f"  Uğrama adayı sayısı: {len(wp_candidates)}")
 
-    # Seçilen uğramalı rotalar için kalan_df'i güncelle ve plan satırı üret
+    # Seçilen uğramalı rotalar için kalan_df'i güncelle ve plan satırı üret.
+    # Her hat (tarih, cikis, varis) yalnızca BİR ugrama adayında kullanılabilir;
+    # en yüksek tasarruflu aday önce geldiği için greedy seçim optimale yakındır.
     ugrama_plan_rows = []
-    ugrama_kullanilanlar = set()   # (tarih, hat1, hat2) — çifte atamayı önler
+    ugrama_hats = set()   # (tarih, cikis, varis) — bu hat zaten ugrama'da kullanıldı
 
     for cand in wp_candidates:
         gun  = cand["tarih"]
         hat1 = cand["hat1"]
         hat2 = cand["hat2"]
-        key  = (gun, hat1, hat2)
-        if key in ugrama_kullanilanlar:
+
+        key1 = (gun, hat1[0], hat1[1])
+        key2 = (gun, hat2[0], hat2[1])
+
+        # Her iki hat da daha önce kullanılmamış olmalı
+        if key1 in ugrama_hats or key2 in ugrama_hats:
             continue
 
-        # kalan_df'de hat1 ve hat2 yüklerini düş
-        def reduce_kalan(cikis, varis, azalt):
-            mask = (
-                (kalan_df["tarih"] == gun) &
-                (kalan_df["cikis_tm"] == cikis) &
-                (kalan_df["varis_tm"] == varis)
-            )
-            kalan_df.loc[mask, "kalan"] = (kalan_df.loc[mask, "kalan"] - azalt).clip(lower=0)
+        # kalan_df'den güncel yükleri al (önceki adaylar düşmüş olabilir)
+        mask1 = ((kalan_df["tarih"] == gun) &
+                 (kalan_df["cikis_tm"] == hat1[0]) &
+                 (kalan_df["varis_tm"] == hat1[1]))
+        mask2 = ((kalan_df["tarih"] == gun) &
+                 (kalan_df["cikis_tm"] == hat2[0]) &
+                 (kalan_df["varis_tm"] == hat2[1]))
 
-        reduce_kalan(hat1[0], hat1[1], cand["load1"])
-        reduce_kalan(hat2[0], hat2[1], cand["load2"])
+        actual1 = float(kalan_df.loc[mask1, "kalan"].iloc[0]) if mask1.any() else 0.0
+        actual2 = float(kalan_df.loc[mask2, "kalan"].iloc[0]) if mask2.any() else 0.0
+
+        if actual1 <= 0 or actual2 <= 0:
+            continue
+
+        # kalan_df'yi güncelle
+        kalan_df.loc[mask1, "kalan"] = (kalan_df.loc[mask1, "kalan"] - actual1).clip(lower=0)
+        kalan_df.loc[mask2, "kalan"] = (kalan_df.loc[mask2, "kalan"] - actual2).clip(lower=0)
 
         guzergah = "→".join(cand["stops"])
+        # Her hat ayrı satıra yazılır — invariant her O→D çiftini ayrı kontrol eder.
+        # Maliyet yalnızca hat1 satırında; toplam maliyet değişmez.
         ugrama_plan_rows.append({
             "Tarih":       gun,
             "Araç Tipi":   f"Spot {cand['tip']} (Uğramalı)",
-            "Çıkış TM":    cand["stops"][0],
-            "Varış TM":    cand["stops"][-1],
+            "Çıkış TM":    hat1[0],
+            "Varış TM":    hat1[1],
             "Güzergah":    guzergah,
-            "Atanan Desi": round(cand["toplam_desi"], 2),
+            "Atanan Desi": round(actual1, 2),
             "Maliyet":     cand["maliyet"],
         })
-        ugrama_kullanilanlar.add(key)
+        ugrama_plan_rows.append({
+            "Tarih":       gun,
+            "Araç Tipi":   f"Spot {cand['tip']} (Uğramalı)",
+            "Çıkış TM":    hat2[0],
+            "Varış TM":    hat2[1],
+            "Güzergah":    guzergah,
+            "Atanan Desi": round(actual2, 2),
+            "Maliyet":     0.0,
+        })
+
+        ugrama_hats.add(key1)
+        ugrama_hats.add(key2)
 
     ugrama_plan = pd.DataFrame(ugrama_plan_rows)
     print(f"  Seçilen uğramalı rota: {len(ugrama_plan)}")
