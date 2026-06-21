@@ -48,10 +48,29 @@ def validate_day(
     from src.config import VEHICLE_TYPES, VEHICLE_ORDER, MIN_DOLULUK_ORAN, UGRAMA_SAPMA_ESIGI
     from src.layer2_assignment.distance import route_distance
     from src.layer2_assignment.waypoint import find_waypoint_candidates
+    from src.layer2_assignment.cost_function import vehicle_cost
+    from src.layer2_assignment.spot_assigner import _best_spot_vehicle, _best_full_vehicle, _MAX_KAP
 
-    def spot_cost(tip, km):
-        v = VEHICLE_TYPES[tip]
-        return v["spot_sabit"] + v["spot_km"] * km
+    def _direct_decompose(desi, km):
+        """
+        Tek bir O→D talebini araçlara böler — greedy spot_assigner ile BİREBİR aynı
+        kural: kapasiteyi aşan kısım tam araçlarla bölünür, son parça %10 eşiğine
+        tabidir. Döndürür: (toplam_maliyet, karsilanan_desi).
+        """
+        total, served, rem = 0.0, 0.0, desi
+        while rem > 0:
+            if rem > _MAX_KAP:
+                tip = _best_full_vehicle(km)
+                atanan = VEHICLE_TYPES[tip]["kapasite"]
+            else:
+                tip, _ = _best_spot_vehicle(rem, km)
+                if tip is None:       # %10 eşiği altı artık yük → karşılanamaz
+                    break
+                atanan = min(rem, VEHICLE_TYPES[tip]["kapasite"])
+            total += vehicle_cost(tip, km, kiralik=False)
+            served += atanan
+            rem = round(rem - atanan, 2)
+        return total, served
 
     # Aday rota üretimi
     demands = {
@@ -60,20 +79,17 @@ def validate_day(
     }
     routes = []  # her rota: {"stops", "covered_demands", "tip", "cost"}
 
-    # Doğrudan O→D rotaları
+    # Doğrudan O→D rotaları — her talep için tam-kapsama (çok araçlı) tek seçenek.
+    # Karşılanan desi 0 ise (tümü %10 altı) rota üretilmez; o talep zaten karşılanamaz.
     for (cikis, varis), desi in demands.items():
         km = dist_df.loc[cikis, varis]
-        for tip in VEHICLE_ORDER:
-            kap = VEHICLE_TYPES[tip]["kapasite"]
-            if desi > kap:
-                continue
-            if desi < kap * MIN_DOLULUK_ORAN:
-                continue
+        cost, served = _direct_decompose(desi, km)
+        if served > 0:
             routes.append({
                 "stops":            [cikis, varis],
                 "covered_demands":  {(cikis, varis): desi},
-                "tip":              tip,
-                "cost":             spot_cost(tip, km),
+                "tip":              "decompose",
+                "cost":             cost,
             })
 
     # Uğramalı rotalar (waypoint adaylarından)

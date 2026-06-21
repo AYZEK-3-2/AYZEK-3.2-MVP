@@ -11,11 +11,7 @@ import pandas as pd
 import numpy as np
 from src.config import VEHICLE_TYPES, VEHICLE_ORDER, MIN_DOLULUK_ORAN
 from src.layer2_assignment.distance import route_distance
-
-
-def _spot_cost(tip: str, mesafe_km: float) -> float:
-    v = VEHICLE_TYPES[tip]
-    return v["spot_sabit"] + v["spot_km"] * mesafe_km
+from src.layer2_assignment.cost_function import vehicle_cost
 
 
 def _best_spot_vehicle(desi: float, mesafe_km: float) -> tuple[str, float] | tuple[None, None]:
@@ -31,12 +27,28 @@ def _best_spot_vehicle(desi: float, mesafe_km: float) -> tuple[str, float] | tup
             continue
         if desi > kap:
             continue
-        cost = _spot_cost(tip, mesafe_km)
+        cost = vehicle_cost(tip, mesafe_km, kiralik=False)
         desi_basi = cost / desi
         if desi_basi < best_cost:
             best_cost = desi_basi
             best_tip  = tip
     return best_tip, best_cost
+
+
+# En büyük araç kapasitesi — bunu aşan talepler tek araca sığmaz, bölünmeli.
+_MAX_KAP = max(VEHICLE_TYPES[t]["kapasite"] for t in VEHICLE_ORDER)
+
+
+def _best_full_vehicle(mesafe_km: float) -> str:
+    """
+    Kapasiteyi aşan büyük yükü bölerken kullanılacak aracı seçer: TAM yükte
+    desi başına en ucuz tip (genelde en büyük araç). Böylece >22400 desi gibi
+    talepler çöpe atılmaz, birden çok araca bölünerek taşınır.
+    """
+    return min(
+        VEHICLE_ORDER,
+        key=lambda t: vehicle_cost(t, mesafe_km, kiralik=False) / VEHICLE_TYPES[t]["kapasite"],
+    )
 
 
 def assign_spot(
@@ -73,22 +85,26 @@ def assign_spot(
         # Kalan yükü araçlara doldur (her araç %10 kuralına tabi)
         remaining = kalan
         while remaining > 0:
-            tip, _ = _best_spot_vehicle(remaining, mesafe)
+            if remaining > _MAX_KAP:
+                # Tek araca sığmayan büyük yük → tam dolu bir araç gönder, kalanı
+                # bir sonraki turda işle. (Eskiden burada komple çöpe atılıyordu.)
+                tip    = _best_full_vehicle(mesafe)
+                atanan = VEHICLE_TYPES[tip]["kapasite"]
+            else:
+                tip, _ = _best_spot_vehicle(remaining, mesafe)
+                if tip is None:
+                    # Gerçekten %10 eşiği altında kalan küçük artık yük
+                    unful_rows.append({
+                        "Tarih":               gun,
+                        "Çıkış TM":            cikis,
+                        "Varış TM":            varis,
+                        "Karşılanamayan Desi": round(remaining, 2),
+                        "Sebep":               "%10 spot eşiği altında",
+                    })
+                    break
+                atanan = min(remaining, VEHICLE_TYPES[tip]["kapasite"])
 
-            if tip is None:
-                # %10 eşiği altında — artık yük
-                unful_rows.append({
-                    "Tarih":               gun,
-                    "Çıkış TM":            cikis,
-                    "Varış TM":            varis,
-                    "Karşılanamayan Desi": round(remaining, 2),
-                    "Sebep":               "%10 spot eşiği altında",
-                })
-                break
-
-            kap    = VEHICLE_TYPES[tip]["kapasite"]
-            atanan = min(remaining, kap)
-            maliyet = _spot_cost(tip, mesafe)
+            maliyet = vehicle_cost(tip, mesafe, kiralik=False)
 
             plan_rows.append({
                 "Tarih":       gun,

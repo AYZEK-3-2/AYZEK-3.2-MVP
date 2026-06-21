@@ -15,11 +15,7 @@ import pandas as pd
 import numpy as np
 from src.config import VEHICLE_TYPES, VEHICLE_ORDER, UGRAMA_SAPMA_ESIGI, MAX_ARA_DURAK
 from src.layer2_assignment.distance import route_distance
-
-
-def _spot_cost(tip: str, mesafe_km: float) -> float:
-    v = VEHICLE_TYPES[tip]
-    return v["spot_sabit"] + v["spot_km"] * mesafe_km
+from src.layer2_assignment.cost_function import vehicle_cost
 
 
 def _min_vehicle_for_load(peak_load: float) -> str | None:
@@ -98,7 +94,7 @@ def find_waypoint_candidates(
                 if tip is None:
                     continue
 
-                ugrama_maliyet = _spot_cost(tip, kum_mesafe)
+                ugrama_maliyet = vehicle_cost(tip, kum_mesafe, kiralik=False)
 
                 # Direkt maliyet: iki ayrı araç
                 tip1 = _min_vehicle_for_load(load_od)
@@ -106,8 +102,8 @@ def find_waypoint_candidates(
                 if tip1 is None or tip2 is None:
                     continue
                 direkt_maliyet = (
-                    _spot_cost(tip1, direkt_mesafe)
-                    + _spot_cost(tip2, dist_df.loc[origin2, dest2])
+                    vehicle_cost(tip1, direkt_mesafe, kiralik=False)
+                    + vehicle_cost(tip2, dist_df.loc[origin2, dest2], kiralik=False)
                 )
 
                 if ugrama_maliyet < direkt_maliyet:
