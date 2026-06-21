@@ -49,11 +49,11 @@ Ham Veri (130 gün)
 AYZEK-3.2-PROJECT/
 │
 ├── data/
-│   ├── raw/                          # Ham xlsx dosyaları (setup_data.py ile kopyalanır)
+│   ├── raw/                          # Ham xlsx dosyaları (repoya dahil, ASCII isimli)
 │   │   ├── Desi_talep.xlsx           # 10.770 satır: 89 hat × 130 gün
 │   │   ├── Koordinatlar_v2.xlsx      # 18 TM koordinatı
-│   │   ├── Araç_Kapasite_Maliyet.xlsx
-│   │   └── Kiralık_Araçlar.xlsx      # 14 kiralık araç, 12 hat
+│   │   ├── Arac_Kapasite_Maliyet.xlsx
+│   │   └── Kiralik_Araclar.xlsx      # 14 kiralık araç, 12 hat
 │   └── processed/                    # Ara çıktılar (runtime'da üretilir)
 │       └── distance_matrix.csv       # 18×18 Haversine mesafe matrisi
 │
@@ -82,7 +82,7 @@ AYZEK-3.2-PROJECT/
 ├── notebooks/                        # EDA ve deney notebook'ları
 │
 ├── main.py                           # Uçtan uca pipeline çalıştırıcı
-├── setup_data.py                     # Ham verileri data/raw/ altına kopyalar
+├── docs/METODOLOJI.md / .pdf         # Jüri için metodoloji notu
 └── requirements.txt
 ```
 
@@ -93,10 +93,10 @@ AYZEK-3.2-PROJECT/
 ```bash
 # Bağımlılıkları yükle
 pip install -r requirements.txt
-
-# Ham veri dosyalarını proje içine kopyala
-python setup_data.py
 ```
+
+Ham veri dosyaları repoya dahildir (`data/raw/`); ayrı bir kopyalama adımı gerekmez.
+Klonlayıp doğrudan `python main.py` çalıştırabilirsiniz.
 
 **Gereksinimler:** Python 3.10+, pandas, numpy, lightgbm, scikit-learn, openpyxl, pulp
 
@@ -147,7 +147,7 @@ Pipeline sırası `main.py` içinde 10 adım olarak belgelenmiştir.
 
 ### Tahmin (Katman 1)
 - **Tek global LightGBM modeli** — 89 hat için ayrı model yerine hat kimliği feature olarak verilir
-- **Recursive multi-step:** lag_1 gelecek günler için modelin kendi tahminiyle doldurulur (NaN önlemi)
+- **Direct multi-step + 5-seed ensemble:** Her hedef gün sabit bir origin'den doğrudan tahmin edilir; tahmin geri beslenmez (recursive'in hata birikimi olmaz). CV WAPE ~%21.1
 - **Zero-floor:** `max(0, tahmin)` — negatif desi atama motorunu çökertmez
 - **Kanonik yuvarlama:** tahmin üretilince 2 haneye sabitlenir; hem çıktı dosyası hem atama aynı değerden beslenir
 
@@ -157,7 +157,8 @@ Pipeline sırası `main.py` içinde 10 adım olarak belgelenmiştir.
 - **Uğrama yalnız spot havuzunda** — kiralık araçlar tanımlı rotasında çalışır (kural ihlali önlemi)
 - **Pik yük araç seçimi:** araç son bacağa göre değil rotanın maksimum anlık yüküne göre seçilir
 - **Kümülatif bacak mesafesi:** uğramalı rotada maliyet doğrudan O→D değil, tüm bacakların Haversine toplamıdır
-- **Artık yük terminali:** %10 eşiği (560 desi) altındaki yük atanmaz, unfulfilled tablosuna yazılır
+- **Büyük talep bölme:** en büyük araç kapasitesini (22.400 desi) aşan yük birden çok tam araca bölünür (atılmaz) → kapsama %99.99
+- **Artık yük terminali:** yalnızca %10 eşiği (560 desi) altındaki küçük artık yük atanmaz, unfulfilled tablosuna yazılır
 
 ### Doğrulama (Katman 3)
 - **Rota-tabanlı ILP** (set-partitioning): uğramalı rotaları da içerdiği için gerçek optimum kanıtı sağlar
