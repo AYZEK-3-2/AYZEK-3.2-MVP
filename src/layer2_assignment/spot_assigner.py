@@ -35,6 +35,22 @@ def _best_spot_vehicle(desi: float, mesafe_km: float) -> tuple[str, float] | tup
     return best_tip, best_cost
 
 
+# En büyük araç kapasitesi — bunu aşan talepler tek araca sığmaz, bölünmeli.
+_MAX_KAP = max(VEHICLE_TYPES[t]["kapasite"] for t in VEHICLE_ORDER)
+
+
+def _best_full_vehicle(mesafe_km: float) -> str:
+    """
+    Kapasiteyi aşan büyük yükü bölerken kullanılacak aracı seçer: TAM yükte
+    desi başına en ucuz tip (genelde en büyük araç). Böylece >22400 desi gibi
+    talepler çöpe atılmaz, birden çok araca bölünerek taşınır.
+    """
+    return min(
+        VEHICLE_ORDER,
+        key=lambda t: vehicle_cost(t, mesafe_km, kiralik=False) / VEHICLE_TYPES[t]["kapasite"],
+    )
+
+
 def assign_spot(
     kalan_df: pd.DataFrame,
     dist_df: pd.DataFrame,
@@ -69,21 +85,25 @@ def assign_spot(
         # Kalan yükü araçlara doldur (her araç %10 kuralına tabi)
         remaining = kalan
         while remaining > 0:
-            tip, _ = _best_spot_vehicle(remaining, mesafe)
+            if remaining > _MAX_KAP:
+                # Tek araca sığmayan büyük yük → tam dolu bir araç gönder, kalanı
+                # bir sonraki turda işle. (Eskiden burada komple çöpe atılıyordu.)
+                tip    = _best_full_vehicle(mesafe)
+                atanan = VEHICLE_TYPES[tip]["kapasite"]
+            else:
+                tip, _ = _best_spot_vehicle(remaining, mesafe)
+                if tip is None:
+                    # Gerçekten %10 eşiği altında kalan küçük artık yük
+                    unful_rows.append({
+                        "Tarih":               gun,
+                        "Çıkış TM":            cikis,
+                        "Varış TM":            varis,
+                        "Karşılanamayan Desi": round(remaining, 2),
+                        "Sebep":               "%10 spot eşiği altında",
+                    })
+                    break
+                atanan = min(remaining, VEHICLE_TYPES[tip]["kapasite"])
 
-            if tip is None:
-                # %10 eşiği altında — artık yük
-                unful_rows.append({
-                    "Tarih":               gun,
-                    "Çıkış TM":            cikis,
-                    "Varış TM":            varis,
-                    "Karşılanamayan Desi": round(remaining, 2),
-                    "Sebep":               "%10 spot eşiği altında",
-                })
-                break
-
-            kap    = VEHICLE_TYPES[tip]["kapasite"]
-            atanan = min(remaining, kap)
             maliyet = vehicle_cost(tip, mesafe, kiralik=False)
 
             plan_rows.append({
