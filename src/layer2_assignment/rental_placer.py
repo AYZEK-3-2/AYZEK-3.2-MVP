@@ -10,6 +10,7 @@ Kurallar:
 """
 import pandas as pd
 from src.config import VEHICLE_TYPES
+from src.layer2_assignment.cost_function import vehicle_cost
 
 
 def place_rental_vehicles(
@@ -54,11 +55,7 @@ def place_rental_vehicles(
             atanan     = min(talep_hat, toplam_kap)   # gerçek yük
 
             mesafe = dist_df.loc[cikis, varis] if cikis != varis else 0.0
-            maliyet_birim = (
-                VEHICLE_TYPES[tip]["kira_gun"]
-                + VEHICLE_TYPES[tip]["kira_km"] * mesafe
-            )
-            toplam_maliyet = maliyet_birim * n_arac
+            maliyet_birim = vehicle_cost(tip, mesafe, kiralik=True)
 
             for _ in range(n_arac):
                 plan_rows.append({

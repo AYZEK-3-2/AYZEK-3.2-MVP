@@ -11,11 +11,7 @@ import pandas as pd
 import numpy as np
 from src.config import VEHICLE_TYPES, VEHICLE_ORDER, MIN_DOLULUK_ORAN
 from src.layer2_assignment.distance import route_distance
-
-
-def _spot_cost(tip: str, mesafe_km: float) -> float:
-    v = VEHICLE_TYPES[tip]
-    return v["spot_sabit"] + v["spot_km"] * mesafe_km
+from src.layer2_assignment.cost_function import vehicle_cost
 
 
 def _best_spot_vehicle(desi: float, mesafe_km: float) -> tuple[str, float] | tuple[None, None]:
@@ -31,7 +27,7 @@ def _best_spot_vehicle(desi: float, mesafe_km: float) -> tuple[str, float] | tup
             continue
         if desi > kap:
             continue
-        cost = _spot_cost(tip, mesafe_km)
+        cost = vehicle_cost(tip, mesafe_km, kiralik=False)
         desi_basi = cost / desi
         if desi_basi < best_cost:
             best_cost = desi_basi
@@ -88,7 +84,7 @@ def assign_spot(
 
             kap    = VEHICLE_TYPES[tip]["kapasite"]
             atanan = min(remaining, kap)
-            maliyet = _spot_cost(tip, mesafe)
+            maliyet = vehicle_cost(tip, mesafe, kiralik=False)
 
             plan_rows.append({
                 "Tarih":       gun,
